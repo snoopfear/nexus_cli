@@ -146,7 +146,7 @@ After=network.target
 User=$USER
 WorkingDirectory=$HOME/network-api/clients/cli
 Environment=NONINTERACTIVE=1
-ExecStart=$HOME/.cargo/bin/cargo run --release --bin prover -- beta.orchestrator.nexus.xyz
+ExecStart=$HOME/.cargo/bin/cargo run -r -- start --env beta
 Restart=always
 RestartSec=10
 
