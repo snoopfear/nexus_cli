@@ -36,7 +36,7 @@ echo -e "${PINK}${BOLD}Starting the installation process...\n${NORMAL}"
 SERVICE_NAME="nexus"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
 NEXUS_HOME="$HOME/.nexus"
-PROVER_ID="zNbgtcBhgteJ1EzBt6L0f5mNujY2"
+PROVER_ID=""
 
 # Убедимся, что директория $NEXUS_HOME существует
 if [ ! -d "$NEXUS_HOME" ]; then
