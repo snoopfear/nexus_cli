@@ -2,6 +2,8 @@
 
 set -e
 
+read -p "Сколько контейнеров создать? " CONTAINER_COUNT
+
 DIR="$HOME/nexus-docker"
 mkdir -p "$DIR"
 cd "$DIR"
@@ -29,28 +31,22 @@ CMD ["bash"]
 EOF
 
 echo "Создаю docker-compose.yml..."
-cat > docker-compose.yml <<'EOF'
+cat > docker-compose.yml <<EOF
 version: '3.8'
 
 services:
-  nexus1:
-    build: .
-    container_name: nexus1
-    stdin_open: true
-    tty: true
-
-  nexus2:
-    build: .
-    container_name: nexus2
-    stdin_open: true
-    tty: true
-
-  nexus3:
-    build: .
-    container_name: nexus3
-    stdin_open: true
-    tty: true
 EOF
+
+for i in $(seq 1 $CONTAINER_COUNT); do
+  cat >> docker-compose.yml <<EOF
+  nexus$i:
+    build: .
+    container_name: nexus$i
+    stdin_open: true
+    tty: true
+
+EOF
+done
 
 echo "Создаю build.sh..."
 cat > build.sh <<'EOF'
