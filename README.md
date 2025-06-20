@@ -4,4 +4,4 @@ wget -O nexus-cli.sh https://raw.githubusercontent.com/snoopfear/nexus_cli/refs/
 
 docker exec -it nexus1 bash
 
-nexus-network start --node-id <your-node-id> > /var/log/nexus.log 2>&1 &
+nohup nexus-network start --node-id * > /var/log/nexus.log 2>&1 &
