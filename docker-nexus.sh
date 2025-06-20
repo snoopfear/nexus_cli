@@ -1,49 +1,48 @@
 #!/bin/bash
-
 set -e
 
-# Проверка и установка Docker и Docker Compose
+# --- Функция для проверки и установки Docker ---
 install_docker() {
-  if ! command -v docker &> /dev/null; then
+  if ! command -v docker >/dev/null 2>&1; then
     echo "Docker не найден. Устанавливаем Docker..."
-    sudo apt update
-    sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-    echo \
-      "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-      $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    sudo apt update
-    sudo apt install -y docker-ce docker-ce-cli containerd.io
-    sudo systemctl enable --now docker
-    echo "Docker установлен."
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sh get-docker.sh
+    rm get-docker.sh
+    systemctl enable docker
+    systemctl start docker
   else
     echo "Docker уже установлен."
   fi
+}
 
-  if ! command -v docker-compose &> /dev/null; then
-    echo "Docker Compose не найден. Устанавливаем Docker Compose..."
-    # Скачиваем последнюю версию docker-compose
-    DOCKER_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep tag_name | cut -d '"' -f 4)
-    sudo curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    sudo chmod +x /usr/local/bin/docker-compose
-    echo "Docker Compose установлен."
+# --- Функция для проверки и установки docker-compose ---
+install_docker_compose() {
+  if ! command -v docker-compose >/dev/null 2>&1; then
+    echo "docker-compose не найден. Устанавливаем docker-compose..."
+    DOCKER_COMPOSE_VER="v2.27.0"
+    curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VER}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    chmod +x /usr/local/bin/docker-compose
   else
-    echo "Docker Compose уже установлен."
+    echo "docker-compose уже установлен."
   fi
 }
 
-# Запрос количества контейнеров
-read -p "Сколько контейнеров создать? " CONTAINER_COUNT
+install_docker
+install_docker_compose
 
+# --- Создаём рабочую папку ---
 DIR="$HOME/nexus-docker"
 mkdir -p "$DIR"
 cd "$DIR"
 
-install_docker
+# --- Запрашиваем количество контейнеров ---
+read -p "Введите количество контейнеров для запуска (по умолчанию 3): " COUNT
+COUNT=${COUNT:-3}
 
-echo "Создаю Dockerfile..."
+# --- Пишем Dockerfile ---
 cat > Dockerfile <<'EOF'
-FROM ubuntu:24.04
+# Stage 1: Builder
+FROM ubuntu:24.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-c"]
@@ -60,42 +59,51 @@ ENV PATH="/root/.cargo/bin:$PATH"
 
 RUN curl https://cli.nexus.xyz/ | sh
 
+# Stage 2: Final image
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+SHELL ["/bin/bash", "-c"]
+
+RUN apt update && apt upgrade -y && \
+    apt install -y curl unzip libssl-dev
+
+COPY --from=builder /root/.nexus/bin/nexus-network /usr/local/bin/nexus-network
+
+ENV PATH="/usr/local/bin:$PATH"
+
 CMD ["bash"]
 EOF
 
-echo "Создаю docker-compose.yml..."
-cat > docker-compose.yml <<EOF
-version: '3.8'
+# --- Пишем docker-compose.yml ---
+echo "version: '3.8'" > docker-compose.yml
+echo "services:" >> docker-compose.yml
 
-services:
-EOF
-
-for ((i=1; i<=CONTAINER_COUNT; i++)); do
+for i in $(seq 1 $COUNT); do
   cat >> docker-compose.yml <<EOF
   nexus$i:
     build: .
     container_name: nexus$i
     stdin_open: true
     tty: true
-
 EOF
 done
 
-echo "Создаю build.sh..."
+# --- Создаём скрипт для сборки ---
 cat > build.sh <<'EOF'
 #!/bin/bash
 docker-compose build
 EOF
-
 chmod +x build.sh
 
-echo "Собираю образы..."
+echo "Собираем образы..."
 ./build.sh
 
-echo "Поднимаю контейнеры..."
+echo "Поднимаем контейнеры..."
 docker-compose up -d
 
-echo "Готово! Для входа в контейнеры используй, например:"
-for ((i=1; i<=CONTAINER_COUNT; i++)); do
+echo ""
+echo "Готово! Контейнеры запущены:"
+for i in $(seq 1 $COUNT); do
   echo "  docker exec -it nexus$i bash"
 done
