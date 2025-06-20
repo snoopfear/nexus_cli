@@ -2,11 +2,44 @@
 
 set -e
 
+# Проверка и установка Docker и Docker Compose
+install_docker() {
+  if ! command -v docker &> /dev/null; then
+    echo "Docker не найден. Устанавливаем Docker..."
+    sudo apt update
+    sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+      $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    sudo apt update
+    sudo apt install -y docker-ce docker-ce-cli containerd.io
+    sudo systemctl enable --now docker
+    echo "Docker установлен."
+  else
+    echo "Docker уже установлен."
+  fi
+
+  if ! command -v docker-compose &> /dev/null; then
+    echo "Docker Compose не найден. Устанавливаем Docker Compose..."
+    # Скачиваем последнюю версию docker-compose
+    DOCKER_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep tag_name | cut -d '"' -f 4)
+    sudo curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+    echo "Docker Compose установлен."
+  else
+    echo "Docker Compose уже установлен."
+  fi
+}
+
+# Запрос количества контейнеров
 read -p "Сколько контейнеров создать? " CONTAINER_COUNT
 
 DIR="$HOME/nexus-docker"
 mkdir -p "$DIR"
 cd "$DIR"
+
+install_docker
 
 echo "Создаю Dockerfile..."
 cat > Dockerfile <<'EOF'
@@ -37,7 +70,7 @@ version: '3.8'
 services:
 EOF
 
-for i in $(seq 1 $CONTAINER_COUNT); do
+for ((i=1; i<=CONTAINER_COUNT; i++)); do
   cat >> docker-compose.yml <<EOF
   nexus$i:
     build: .
@@ -63,4 +96,6 @@ echo "Поднимаю контейнеры..."
 docker-compose up -d
 
 echo "Готово! Для входа в контейнеры используй, например:"
-echo "  docker exec -it nexus1 bash"
+for ((i=1; i<=CONTAINER_COUNT; i++)); do
+  echo "  docker exec -it nexus$i bash"
+done
