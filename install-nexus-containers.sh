@@ -35,9 +35,21 @@ if ! command -v docker-compose &>/dev/null; then
   chmod +x /usr/local/bin/docker-compose
 fi
 
-# --- Установка nexus-network ---
-echo "🔨 Устанавливаем nexus-network..."
-yes | curl https://cli.nexus.xyz/ | sh
+# --- Установка nexus-network с автосогласием ---
+echo "🔨 Качаем и устанавливаем nexus-network..."
+
+sudo apt install -y expect
+
+expect <<EOF
+spawn bash -c "curl https://cli.nexus.xyz/ | sh"
+expect {
+    "Do you agree to the Nexus Beta Terms of Use*" {
+        send "y\r"
+        exp_continue
+    }
+    eof
+}
+EOF
 
 # --- Создание и переход в рабочую директорию ---
 DIR="$HOME/nexus-docker"
