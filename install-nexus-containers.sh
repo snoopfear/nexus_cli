@@ -81,7 +81,7 @@ if [ -z "$NODE_ID" ]; then
   exit 1
 fi
 
-screen -dmS nexys bash -c "nexus-network start --node-id $NODE_ID"
+screen -dmS nexus bash -c "nexus-network start --node-id $NODE_ID"
 tail -f /dev/null
 EOF
 chmod +x entrypoint.sh
@@ -113,5 +113,5 @@ echo "▶️ Запускаем контейнеры..."
 docker-compose up -d
 
 echo ""
-echo "✅ Все $COUNT контейнеров запущены и работают в screen-сессиях 'nexys'"
-echo "Проверить логи можно так: docker exec -it nexus1 screen -r nexys"
+echo "✅ Все $COUNT контейнеров запущены и работают в screen-сессиях 'nexus'"
+echo "Проверить логи можно так: docker exec -it nexus1 screen -r nexus"
