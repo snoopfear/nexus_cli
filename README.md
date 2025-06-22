@@ -11,3 +11,5 @@ nohup nexus-network start --node-id * > /var/log/nexus.log 2>&1 &
 curl -fsSL https://raw.githubusercontent.com/snoopfear/nexus_cli/refs/heads/main/install-nexus-containers.sh -o install-nexus-containers.sh && chmod +x install-nexus-containers.sh && ./install-nexus-containers.sh
 
 nodeid.txt
+
+docker exec -it nexus1 screen -r nexys
