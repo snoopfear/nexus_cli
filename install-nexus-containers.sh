@@ -1,27 +1,24 @@
 #!/bin/bash
 set -e
 
-# --- Базовая установка окружения и инструментов ---
+# --- Установка зависимостей ---
 echo "🔧 Устанавливаем зависимости..."
-
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y build-essential pkg-config libssl-dev git-all unzip curl screen
-sudo apt install -y protobuf-compiler cargo
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+sudo apt install -y build-essential pkg-config libssl-dev git-all unzip curl screen protobuf-compiler cargo
 
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source $HOME/.cargo/env
 echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
-
 rustup update
 
 sudo apt remove -y protobuf-compiler
 curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v25.2/protoc-25.2-linux-x86_64.zip
-unzip protoc-25.2-linux-x86_64.zip -d $HOME/.local
-export PATH="$HOME/.local/bin:$PATH"
+unzip -o protoc-25.2-linux-x86_64.zip -d $HOME/.local
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+export PATH="$HOME/.local/bin:$PATH"
 
-# --- Установка Docker и Docker Compose ---
+# --- Docker и Docker Compose ---
 if ! command -v docker &>/dev/null; then
   echo "📦 Устанавливаем Docker..."
   curl -fsSL https://get.docker.com -o get-docker.sh
@@ -38,17 +35,25 @@ if ! command -v docker-compose &>/dev/null; then
   chmod +x /usr/local/bin/docker-compose
 fi
 
-# --- Клонирование nexus и сборка ---
-echo "🔨 Качаем и устанавливаем nexus-network..."
-curl https://cli.nexus.xyz/ | sh
+# --- Установка nexus-network ---
+echo "🔨 Устанавливаем nexus-network..."
+yes | curl https://cli.nexus.xyz/ | sh
 
-# --- Создание рабочего каталога ---
+# --- Создание и переход в рабочую директорию ---
 DIR="$HOME/nexus-docker"
 mkdir -p "$DIR"
 cd "$DIR"
 
-read -p "Введите количество контейнеров (по умолчанию 3): " COUNT
-COUNT=${COUNT:-3}
+# --- Проверка nodeid.txt ---
+NODEID_FILE="/root/nodeid.txt"
+if [ ! -f "$NODEID_FILE" ]; then
+  echo "❌ Не найден $NODEID_FILE"
+  exit 1
+fi
+
+mapfile -t NODE_IDS < "$NODEID_FILE"
+COUNT=${#NODE_IDS[@]}
+echo "🔢 Найдено $COUNT node ID"
 
 # --- Dockerfile ---
 cat > Dockerfile <<'EOF'
@@ -68,40 +73,40 @@ RUN chmod +x /usr/local/bin/nexus-network /entrypoint.sh
 CMD ["/entrypoint.sh"]
 EOF
 
-# --- Скрипт запуска внутри контейнера ---
+# --- Entrypoint для контейнера ---
 cat > entrypoint.sh <<'EOF'
 #!/bin/bash
 set -e
 
-i=$(echo $HOSTNAME | grep -o '[0-9]*$')
-NODE_ID=$(sed -n "${i}p" /root/nodeid.txt)
-
 if [ -z "$NODE_ID" ]; then
-  echo "❌ Node ID для контейнера $HOSTNAME не найден в /root/nodeid.txt"
+  echo "❌ NODE_ID не задан в переменных окружения"
   exit 1
 fi
 
+echo "▶️ Запускаем screen 'nexus' с NODE_ID=$NODE_ID..."
 screen -dmS nexus bash -c "nexus-network start --node-id $NODE_ID"
 tail -f /dev/null
 EOF
+
 chmod +x entrypoint.sh
 
-# --- Сохраняем бинарник nexus-network ---
+# --- Копируем бинарник ---
 cp ~/.nexus/bin/nexus-network .
 
 # --- docker-compose.yml ---
 echo "version: '3.8'" > docker-compose.yml
 echo "services:" >> docker-compose.yml
 
-for i in $(seq 1 $COUNT); do
+for i in "${!NODE_IDS[@]}"; do
+  NODE_ID="${NODE_IDS[$i]}"
   cat >> docker-compose.yml <<EOF
-  nexus$i:
+  "$NODE_ID":
     build: .
-    container_name: nexus$i
+    container_name: "$NODE_ID"
     tty: true
     stdin_open: true
-    volumes:
-      - /root/nodeid.txt:/root/nodeid.txt
+    environment:
+      - NODE_ID=$NODE_ID
 EOF
 done
 
@@ -114,4 +119,4 @@ docker-compose up -d
 
 echo ""
 echo "✅ Все $COUNT контейнеров запущены и работают в screen-сессиях 'nexus'"
-echo "Проверить логи можно так: docker exec -it nexus1 screen -r nexus"
+echo "Пример для входа в лог: docker exec -it ${NODE_IDS[0]} screen -r nexus"
