@@ -1,0 +1,25 @@
+cat > ~/nexus-docker/update_nexus.sh <<'EOF'
+#!/bin/bash
+set -e
+cd ~/nexus-docker
+
+docker-compose down
+
+sudo apt install -y expect
+expect <<EOI
+spawn bash -c "curl https://cli.nexus.xyz/ | sh"
+expect {
+    "Do you agree to the Nexus Beta Terms of Use*" {
+        send "yes\r"
+        exp_continue
+    }
+    eof
+}
+EOI
+
+cp ~/.nexus/bin/nexus-network ./nexus-network
+docker-compose build --no-cache
+docker-compose up -d
+EOF
+
+chmod +x ~/nexus-docker/update_nexus.sh && ~/nexus-docker/update_nexus.sh
