@@ -111,10 +111,11 @@ echo "services:" >> docker-compose.yml
 
 for i in "${!NODE_IDS[@]}"; do
   NODE_ID="${NODE_IDS[$i]}"
+  SERVICE_NAME="node_$NODE_ID"
   cat >> docker-compose.yml <<EOF
-  "$NODE_ID":
+  $SERVICE_NAME:
     build: .
-    container_name: "$NODE_ID"
+    container_name: "$SERVICE_NAME"
     tty: true
     stdin_open: true
     environment:
@@ -131,4 +132,4 @@ docker-compose up -d
 
 echo ""
 echo "✅ Все $COUNT контейнеров запущены и работают в screen-сессиях 'nexus'"
-echo "Пример для входа в лог: docker exec -it ${NODE_IDS[0]} screen -r nexus"
+echo "Пример для входа в лог: docker exec -it node_${NODE_IDS[0]} screen -r nexus"
