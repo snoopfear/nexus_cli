@@ -2,6 +2,7 @@ cat > ~/nexus-docker/update_nexus.sh <<'EOF'
 #!/bin/bash
 set -e
 cd ~/nexus-docker
+source /root/.bashrc
 
 docker-compose down
 
