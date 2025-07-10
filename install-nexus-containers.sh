@@ -51,6 +51,8 @@ expect {
 }
 EOF
 
+source /root/.bashrc
+
 # --- Создание и переход в рабочую директорию ---
 DIR="$HOME/nexus-docker"
 mkdir -p "$DIR"
