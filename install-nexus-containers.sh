@@ -56,14 +56,15 @@ DIR="$HOME/nexus-docker"
 mkdir -p "$DIR"
 cd "$DIR"
 
-# --- Проверка nodeid.txt ---
+# --- Проверка и очистка nodeid.txt ---
 NODEID_FILE="/root/nodeid.txt"
 if [ ! -f "$NODEID_FILE" ]; then
   echo "❌ Не найден $NODEID_FILE"
   exit 1
 fi
 
-mapfile -t NODE_IDS < "$NODEID_FILE"
+# 🔽 Очистка строк от пробелов и табов
+mapfile -t NODE_IDS < <(sed 's/^[ \t]*//;s/[ \t]*$//' "$NODEID_FILE")
 COUNT=${#NODE_IDS[@]}
 echo "🔢 Найдено $COUNT node ID"
 
@@ -110,7 +111,7 @@ echo "version: '3.8'" > docker-compose.yml
 echo "services:" >> docker-compose.yml
 
 for i in "${!NODE_IDS[@]}"; do
-  NODE_ID="${NODE_IDS[$i]}"
+  NODE_ID="$(echo "${NODE_IDS[$i]}" | xargs)"  # Очистка пробелов
   SERVICE_NAME="node_$NODE_ID"
   cat >> docker-compose.yml <<EOF
   $SERVICE_NAME:
