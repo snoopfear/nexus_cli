@@ -99,7 +99,7 @@ if [ -z "$NODE_ID" ]; then
 fi
 
 echo "▶️ Запускаем screen 'nexus' с NODE_ID=$NODE_ID..."
-screen -dmS nexus bash -c "nexus-network start --node-id $NODE_ID"
+screen -dmS nexus bash -c "nexus-network start --node-id $NODE_ID --max-threads 2"
 tail -f /dev/null
 EOF
 
