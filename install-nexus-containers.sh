@@ -3,7 +3,6 @@ set -e
 
 # --- Установка зависимостей ---
 echo "🔧 Устанавливаем зависимости..."
-cd nexus-docker && docker compose down
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y build-essential pkg-config libssl-dev git-all unzip curl screen protobuf-compiler cargo
 
