@@ -7,14 +7,10 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install -y build-essential pkg-config libssl-dev git-all unzip curl screen protobuf-compiler cargo expect git
 
 # Rust (если ещё нет)
-if ! command -v cargo &>/dev/null; then
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-  [ -f "$HOME/.cargo/env" ] && source $HOME/.cargo/env
-  export PATH="$HOME/.cargo/bin:$PATH"
-  echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
-fi
-[ -f "$HOME/.cargo/env" ] && source $HOME/.cargo/env
-export PATH="$HOME/.cargo/bin:$PATH"
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source $HOME/.cargo/env
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
 rustup update
 
 # Protobuf
