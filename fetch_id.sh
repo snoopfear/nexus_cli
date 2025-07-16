@@ -2,12 +2,12 @@
 set -e
 
 # 🧹 Очистка предыдущей установки
-cd docker-nexus 2>/dev/null && {
+cd nexus-docker 2>/dev/null && {
   echo "🛑 Останавливаем docker compose..."
   docker compose down || true
   cd ..
-  echo "🧼 Удаляем docker-nexus..."
-  rm -rf docker-nexus
+  echo "🧼 Удаляем nexus-dockers..."
+  rm -rf nexus-docker
 }
 rm -f nodeid.txt /root/nodeid.txt
 
