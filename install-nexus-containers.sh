@@ -32,19 +32,47 @@ if ! command -v docker &>/dev/null; then
   rm get-docker.sh
 fi
 
-# Клонируем и собираем nexus-network (гарантированно под glibc 2.35)
-echo "🔨 Клонируем и собираем nexus-network..."
-cd $HOME
-rm -rf nexus-cli
-git clone https://github.com/nexus-xyz/nexus-cli.git
-cd nexus-cli/clients/cli
-cargo build --release
-
 NEXUS_BIN="$HOME/.nexus/bin"
 mkdir -p "$NEXUS_BIN"
-cp target/release/nexus-network "$NEXUS_BIN/"
-export PATH="$NEXUS_BIN:$PATH"
-echo 'export PATH="$HOME/.nexus/bin:$PATH"' >> ~/.bashrc
+
+echo "🔨 Пробуем скачать официальный nexus-network автоинсталлятором..."
+cd $HOME
+rm -rf ~/.nexus
+expect <<EOF
+spawn bash -c "curl https://cli.nexus.xyz/ | sh"
+expect {
+    "Do you agree to the Nexus Beta Terms of Use*" {
+        send "y\r"
+        exp_continue
+    }
+    eof
+}
+EOF
+
+BINARY="$HOME/.nexus/bin/nexus-network"
+GLIBC_OK=0
+if [ -f "$BINARY" ]; then
+  echo "✅ Бинарник скачан. Проверяем совместимость с glibc..."
+  if "$BINARY" --help >/dev/null 2>&1; then
+    echo "✅ Бинарник рабочий и совместим."
+    GLIBC_OK=1
+  else
+    echo "❌ Бинарник не совместим или не запускается. Будем собирать вручную."
+  fi
+else
+  echo "❌ Не удалось скачать бинарник. Будем собирать вручную."
+fi
+
+if [ "$GLIBC_OK" = "0" ]; then
+  echo "🔨 Клонируем и собираем nexus-network из исходников..."
+  rm -rf nexus-cli
+  git clone https://github.com/nexus-xyz/nexus-cli.git
+  cd nexus-cli/clients/cli
+  cargo build --release
+  cp target/release/nexus-network "$NEXUS_BIN/"
+  export PATH="$NEXUS_BIN:$PATH"
+  echo 'export PATH="$HOME/.nexus/bin:$PATH"' >> ~/.bashrc
+fi
 
 # --- Создание и переход в рабочую директорию ---
 DIR="$HOME/nexus-docker"
@@ -90,7 +118,7 @@ EOF
 
 chmod +x entrypoint.sh
 
-# --- Копируем бинарник (он гарантированно собран под 22.04!) ---
+# --- Копируем бинарник ---
 cp $HOME/.nexus/bin/nexus-network .
 
 # --- docker-compose.yml ---
