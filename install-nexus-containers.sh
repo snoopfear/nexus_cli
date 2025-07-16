@@ -6,7 +6,7 @@ echo "🔧 Устанавливаем зависимости..."
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y build-essential pkg-config libssl-dev git-all unzip curl screen protobuf-compiler cargo expect git
 
-# Rust
+# Rust (если ещё нет)
 if ! command -v cargo &>/dev/null; then
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
   export PATH="$HOME/.cargo/bin:$PATH"
@@ -15,7 +15,7 @@ fi
 export PATH="$HOME/.cargo/bin:$PATH"
 rustup update
 
-# Protobuf (обновлённый, ручной)
+# Protobuf
 sudo apt remove -y protobuf-compiler
 curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v25.2/protoc-25.2-linux-x86_64.zip
 unzip -o protoc-25.2-linux-x86_64.zip -d $HOME/.local
@@ -32,9 +32,7 @@ if ! command -v docker &>/dev/null; then
   rm get-docker.sh
 fi
 
-# Docker compose: используем встроенный (docker compose ...)
-
-# --- Сборка nexus-network из исходников ---
+# Клонируем и собираем nexus-network (гарантированно под glibc 2.35)
 echo "🔨 Клонируем и собираем nexus-network..."
 cd $HOME
 rm -rf nexus-cli
@@ -53,7 +51,7 @@ DIR="$HOME/nexus-docker"
 mkdir -p "$DIR"
 cd "$DIR"
 
-# --- Проверка и обработка nodeid.txt ---
+# --- Проверка nodeid.txt ---
 NODEID_FILE="$HOME/nodeid.txt"
 if [ ! -f "$NODEID_FILE" ]; then
   echo "❌ Не найден $NODEID_FILE (ожидается в $NODEID_FILE)"
@@ -92,7 +90,7 @@ EOF
 
 chmod +x entrypoint.sh
 
-# --- Копируем бинарник ---
+# --- Копируем бинарник (он гарантированно собран под 22.04!) ---
 cp $HOME/.nexus/bin/nexus-network .
 
 # --- docker-compose.yml ---
