@@ -17,3 +17,4 @@ docker exec -it nexus1 screen -r nexys
 fetch ID
 
 bash <(curl -s https://raw.githubusercontent.com/snoopfear/nexus_cli/refs/heads/main/fetch_id.sh)
+
