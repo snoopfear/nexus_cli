@@ -9,10 +9,11 @@ sudo apt install -y build-essential pkg-config libssl-dev git-all unzip curl scr
 # Rust (если ещё нет)
 if ! command -v cargo &>/dev/null; then
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-  source $HOME/.cargo/env 
+  [ -f "$HOME/.cargo/env" ] && source $HOME/.cargo/env
   export PATH="$HOME/.cargo/bin:$PATH"
   echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
 fi
+[ -f "$HOME/.cargo/env" ] && source $HOME/.cargo/env
 export PATH="$HOME/.cargo/bin:$PATH"
 rustup update
 
