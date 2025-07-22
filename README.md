@@ -18,3 +18,6 @@ fetch ID
 
 bash <(curl -s https://raw.githubusercontent.com/snoopfear/nexus_cli/refs/heads/main/fetch_id.sh)
 
+(crontab -l 2>/dev/null; echo '0 0 * * * cd /root/nexus-docker && docker compose down -v && docker compose up -d') | crontab -
+
+sudo fallocate -l 50G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
