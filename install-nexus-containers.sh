@@ -98,8 +98,8 @@ if [ -z "$NODE_ID" ]; then
   exit 1
 fi
 
-MAX_ATTEMPTS=10         # Максимум подряд рестартов, потом пауза
-RESTART_INTERVAL=5      # Сколько ждать между рестартами (сек)
+MAX_ATTEMPTS=50         # Максимум подряд рестартов, потом пауза
+RESTART_INTERVAL=3      # Сколько ждать между рестартами (сек)
 LOG_FILE="/var/log/nexus-restarts.log"
 
 mkdir -p "$(dirname "$LOG_FILE")"
