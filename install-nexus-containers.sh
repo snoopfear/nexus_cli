@@ -98,8 +98,35 @@ if [ -z "$NODE_ID" ]; then
   exit 1
 fi
 
+MAX_ATTEMPTS=10         # Максимум подряд рестартов, потом пауза
+RESTART_INTERVAL=5      # Сколько ждать между рестартами (сек)
+LOG_FILE="/var/log/nexus-restarts.log"
+
+mkdir -p "$(dirname "$LOG_FILE")"
+
 echo "▶️ Запускаем screen 'nexus' с NODE_ID=$NODE_ID..."
-screen -dmS nexus bash -c "nexus-network start --node-id $NODE_ID"
+screen -dmS nexus bash -c '
+  ATTEMPT=0
+  MAX_ATTEMPTS='"$MAX_ATTEMPTS"'
+  RESTART_INTERVAL='"$RESTART_INTERVAL"'
+  LOG_FILE="'"$LOG_FILE"'"
+
+  while true; do
+    ATTEMPT=$((ATTEMPT + 1))
+    echo "$(date "+%Y-%m-%d %H:%M:%S") ▶️ Попытка запуска #$ATTEMPT" | tee -a "$LOG_FILE"
+    /usr/local/bin/nexus-network start --node-id "'"$NODE_ID"'"
+    EXIT_CODE=$?
+    echo "$(date "+%Y-%m-%d %H:%M:%S") ❗️ Процесс завершился с кодом $EXIT_CODE, перезапуск через $RESTART_INTERVAL сек." | tee -a "$LOG_FILE"
+    if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
+      echo "$(date "+%Y-%m-%d %H:%M:%S") ⚠️ Достигнуто $MAX_ATTEMPTS неудачных попыток подряд, пауза 60 секунд..." | tee -a "$LOG_FILE"
+      sleep 60
+      ATTEMPT=0
+    else
+      sleep $RESTART_INTERVAL
+    fi
+  done
+'
+
 tail -f /dev/null
 EOF
 
