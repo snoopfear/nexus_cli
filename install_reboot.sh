@@ -1,33 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# === Параметры, можно переопределять через env при установке ===
+# === Параметры (можно переопределять через env) ===
 TG_TOKEN="${TG_TOKEN:-6769297888:AAFOeaKmGtsSSAGsSVGN-x3I1v_VQyh140M}"
 TG_ID="${TG_ID:-257319019}"
-THRESHOLD="${THRESHOLD:-97}"   # по умолчанию 97%
+THRESHOLD="${THRESHOLD:-97}"
 MODE="${MODE:-avail}"
 SCRIPT_DIR="$HOME/.local/bin"
 SCRIPT_PATH="$SCRIPT_DIR/restart_nexus_on_high_ram.sh"
+CRON_LOG="$HOME/nexus-docker/cron-run.log"
 
-# Создаём каталог для скрипта
+echo "[install] HOME=$HOME USER=$(id -un)"
+echo "[install] SCRIPT_PATH=$SCRIPT_PATH"
+
 mkdir -p "$SCRIPT_DIR"
+mkdir -p "$(dirname "$CRON_LOG")"
 
-# === Записываем финальную версию скрипта ===
+# === Пишем основной скрипт ===
 cat > "$SCRIPT_PATH" <<'EOS'
 #!/usr/bin/env bash
 set -euo pipefail
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# === Настройки ===
-THRESHOLD=${THRESHOLD:-97}          # Порог в %, при котором срабатывает перезапуск
-MODE=${MODE:-avail}                 # raw | avail (рекомендуется: avail)
+THRESHOLD=${THRESHOLD:-97}
+MODE=${MODE:-avail}
 LOG="${LOG:-$HOME/nexus-docker/restart-on-ram.log}"
 
-# Telegram (переопределяются через env при необходимости)
 TG_TOKEN="${TG_TOKEN:-6769297888:AAFOeaKmGtsSSAGsSVGN-x3I1v_VQyh140M}"
 TG_ID="${TG_ID:-257319019}"
 
-# === Надёжная отправка в Telegram (одно сообщение) ===
 send_tg() {
   local msg="$1"
   local code body
@@ -41,18 +42,12 @@ send_tg() {
   echo "[$(date '+%F %T')] Telegram send code=${code} body=${body}" >> "$LOG"
 }
 
-# === Подсчёт памяти ===
 read -r MEMTOTAL MEMFREE MEMAVAILABLE <<<"$(
-  awk '
-    /MemTotal:/     {t=$2}
-    /MemFree:/      {f=$2}
-    /MemAvailable:/ {a=$2}
-    END {printf "%d %d %d", t, f, a}
-  ' /proc/meminfo
+  awk '/MemTotal:/{t=$2} /MemFree:/{f=$2} /MemAvailable:/{a=$2} END{printf "%d %d %d", t, f, a}' /proc/meminfo
 )"
 
-RAW_USED_PCT=$(awk -v t="$MEMTOTAL" -v f="$MEMFREE" 'BEGIN {printf "%.0f", (t-f)/t*100}')
-AVAIL_USED_PCT=$(awk -v t="$MEMTOTAL" -v a="$MEMAVAILABLE" 'BEGIN {printf "%.0f", (t-a)/t*100}')
+RAW_USED_PCT=$(awk -v t="$MEMTOTAL" -v f="$MEMFREE" 'BEGIN{printf "%.0f",(t-f)/t*100}')
+AVAIL_USED_PCT=$(awk -v t="$MEMTOTAL" -v a="$MEMAVAILABLE" 'BEGIN{printf "%.0f",(t-a)/t*100}')
 
 case "$MODE" in
   raw)   USED_PCT=$RAW_USED_PCT;   METRIC="RAW_USED" ;;
@@ -61,9 +56,7 @@ case "$MODE" in
 esac
 
 timestamp="$(date '+%F %T')"
-
 mkdir -p "$(dirname "$LOG")"
-
 echo "[$timestamp] RAW_USED=${RAW_USED_PCT}% AVAIL_USED=${AVAIL_USED_PCT}% MODE=${MODE} THRESHOLD=${THRESHOLD}%" >> "$LOG"
 
 if (( USED_PCT >= THRESHOLD )); then
@@ -79,18 +72,24 @@ if (( USED_PCT >= THRESHOLD )); then
 fi
 EOS
 
-# Выдаём права
 chmod +x "$SCRIPT_PATH"
 
-# === Обновляем crontab (каждые 10 минут) ===
+# === Формируем cron-строку с логом ===
 if command -v /usr/bin/flock >/dev/null 2>&1; then
-  CRON_LINE="*/10 * * * * MODE=$MODE THRESHOLD=$THRESHOLD TG_TOKEN=$TG_TOKEN TG_ID=$TG_ID /usr/bin/flock -n /tmp/restart_nexus_on_high_ram.lock $SCRIPT_PATH"
+  CRON_LINE="*/10 * * * * MODE=$MODE THRESHOLD=$THRESHOLD TG_TOKEN=$TG_TOKEN TG_ID=$TG_ID /usr/bin/flock -n /tmp/restart_nexus_on_high_ram.lock $SCRIPT_PATH >> $CRON_LOG 2>&1"
 else
-  CRON_LINE="*/10 * * * * MODE=$MODE THRESHOLD=$THRESHOLD TG_TOKEN=$TG_TOKEN TG_ID=$TG_ID $SCRIPT_PATH"
+  CRON_LINE="*/10 * * * * MODE=$MODE THRESHOLD=$THRESHOLD TG_TOKEN=$TG_TOKEN TG_ID=$TG_ID $SCRIPT_PATH >> $CRON_LOG 2>&1"
 fi
 
+# === Устанавливаем cron-строку (заменим только нашу) ===
 ( crontab -l 2>/dev/null | grep -vF "$SCRIPT_PATH" ; echo "$CRON_LINE" ) | crontab -
 
-echo "✅ Установка завершена."
-echo "📌 Скрипт: $SCRIPT_PATH"
-echo "📌 Проверка: MODE=avail THRESHOLD=1 $SCRIPT_PATH"
+echo "[install] Cron line installed:"
+echo "$CRON_LINE"
+echo "[install] Current crontab:"
+crontab -l || true
+
+echo "✅ Готово. Тест:"
+echo "  MODE=avail THRESHOLD=1 $SCRIPT_PATH"
+echo "  tail -n 50 $HOME/nexus-docker/restart-on-ram.log"
+echo "  tail -n 50 $CRON_LOG"
