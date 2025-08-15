@@ -1,33 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# ========= Настройки инсталлятора =========
-# Можно переопределить через переменные окружения при запуске:
-# TG_TOKEN="..." TG_ID="..." MODE=avail THRESHOLD=95 ./install.sh
-
-TG_TOKEN_DEFAULT="6769297888:AAFOeaKmGtsSSAGsSVGN-x3I1v_VQyh140M"
-TG_ID_DEFAULT="257319019"
-MODE_DEFAULT="${MODE:-avail}"
-THRESHOLD_DEFAULT="${THRESHOLD:-97}"
-
-# Путь до исполняемого скрипта
-TARGET_DIR="${HOME}/.local/bin"
-SCRIPT_PATH="${TARGET_DIR}/restart_nexus_on_high_ram.sh"
-
-# ========= Создаём скрипт мониторинга =========
-mkdir -p "${TARGET_DIR}"
-
-cat > "${SCRIPT_PATH}" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-
-# === Настройки (можно переопределять через env/cron) ===
-THRESHOLD=${THRESHOLD:-95}          # Порог в %
-MODE=${MODE:-avail}                 # raw | avail
+# === Настройки ===
+THRESHOLD=${THRESHOLD:-95}          # Порог в %, при котором срабатывает перезапуск
+MODE=${MODE:-avail}                 # raw | avail  (рекомендуется: avail)
 LOG="${LOG:-$HOME/nexus-docker/restart-on-ram.log}"
 
-TG_TOKEN="${TG_TOKEN:-__FILL_ME__}"
-TG_ID="${TG_ID:-__FILL_ME__}"
+# Telegram (можно переопределить через переменные окружения)
+TG_TOKEN="${TG_TOKEN:-6769297888:AAFOeaKmGtsSSAGsSVGN-x3I1v_VQyh140M}"
+TG_ID="${TG_ID:-257319019}"
+
+# === Функция надёжной отправки в Telegram ===
+send_tg() {
+  local msg="$1"
+  local code body
+  # -4: IPv4; -m 10: таймаут; --retry 3: ретраи; --retry-connrefused: ретраи при отказе соединения
+  code=$(/usr/bin/curl -4 -sS -m 10 --retry 3 --retry-connrefused \
+    -o /tmp/tg.body.$$ -w "%{http_code}" \
+    -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+    -d chat_id="${TG_ID}" \
+    --data-urlencode text="$msg" || true)
+  body=$(cat /tmp/tg.body.$$ 2>/dev/null || true)
+  rm -f /tmp/tg.body.$$
+  echo "[$(date '+%F %T')] Telegram send code=${code} body=${body}" >> "$LOG"
+}
 
 # === Подсчёт памяти ===
 read -r MEMTOTAL MEMFREE MEMAVAILABLE <<<"$(
@@ -44,6 +41,7 @@ RAW_USED_PCT=$(awk -v t="$MEMTOTAL" -v f="$MEMFREE" 'BEGIN {printf "%.0f", (t-f)
 # AVAIL_USED%: (MemTotal - MemAvailable) / MemTotal * 100
 AVAIL_USED_PCT=$(awk -v t="$MEMTOTAL" -v a="$MEMAVAILABLE" 'BEGIN {printf "%.0f", (t-a)/t*100}')
 
+# Выбор метрики
 case "$MODE" in
   raw)   USED_PCT=$RAW_USED_PCT;   METRIC="RAW_USED" ;;
   avail) USED_PCT=$AVAIL_USED_PCT; METRIC="AVAIL_USED" ;;
@@ -51,6 +49,11 @@ case "$MODE" in
 esac
 
 timestamp="$(date '+%F %T')"
+
+# гарантируем каталог для лога
+mkdir -p "$(dirname "$LOG")"
+
+# диагностическая запись при каждом запуске
 echo "[$timestamp] RAW_USED=${RAW_USED_PCT}% AVAIL_USED=${AVAIL_USED_PCT}% MODE=${MODE} THRESHOLD=${THRESHOLD}%" >> "$LOG"
 
 if (( USED_PCT >= THRESHOLD )); then
@@ -58,39 +61,14 @@ if (( USED_PCT >= THRESHOLD )); then
   MSG="[$timestamp] Перезапуск docker compose из-за высокой RAM (>= ${THRESHOLD}%) на сервере ${SERVER_IP:-unknown}"
   echo "$MSG (metric=${METRIC}, used=${USED_PCT}%)" >> "$LOG"
 
+  # Уведомление до перезапуска (если сеть на секунды «ляжет», это сообщение успеет уйти)
+  send_tg "$MSG (pre-restart)"
+
+  # Перезапуск docker compose
   cd "$HOME/nexus-docker"
   /usr/bin/docker compose down >> "$LOG" 2>&1 || echo "[$timestamp] WARN: docker compose down failed" >> "$LOG"
   /usr/bin/docker compose up -d >> "$LOG" 2>&1 || echo "[$timestamp] WARN: docker compose up -d failed" >> "$LOG"
 
-  # Короткое Telegram-уведомление: только факт и IP
-  if [[ -n "$TG_TOKEN" && -n "$TG_ID" && "$TG_TOKEN" != "__FILL_ME__" ]]; then
-    curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
-         -d chat_id="${TG_ID}" \
-         -d text="$MSG" >/dev/null || true
-  fi
+  # Уведомление после перезапуска
+  send_tg "$MSG (post-restart)"
 fi
-EOF
-
-# Подклеим в скрипт реальные (или переданные) TG_TOKEN/TG_ID
-sed -i "s|__FILL_ME__|${TG_TOKEN_DEFAULT}|g" "${SCRIPT_PATH}"
-chmod +x "${SCRIPT_PATH}"
-
-# ========= Добавляем/обновляем cron-задание (без троганья чужих записей) =========
-# Строка cron, которую хотим иметь
-if command -v /usr/bin/flock >/dev/null 2>&1; then
-  CRON_LINE="*/10 * * * * MODE=${MODE_DEFAULT} THRESHOLD=${THRESHOLD_DEFAULT} TG_TOKEN=${TG_TOKEN_DEFAULT} TG_ID=${TG_ID_DEFAULT} /usr/bin/flock -n /tmp/restart_nexus_on_high_ram.lock ${SCRIPT_PATH}"
-else
-  CRON_LINE="*/10 * * * * MODE=${MODE_DEFAULT} THRESHOLD=${THRESHOLD_DEFAULT} TG_TOKEN=${TG_TOKEN_DEFAULT} TG_ID=${TG_ID_DEFAULT} ${SCRIPT_PATH}"
-fi
-
-# Удалим только предыдущие строки именно с нашим скриптом (не затрагивая другие задания)
-( crontab -l 2>/dev/null | grep -vF "${SCRIPT_PATH}"; echo "${CRON_LINE}" ) | crontab -
-
-echo "Установка завершена:
-- Скрипт: ${SCRIPT_PATH}
-- Cron: каждые 10 минут (MODE=${MODE_DEFAULT}, THRESHOLD=${THRESHOLD_DEFAULT})
-- Telegram: токен и чатID подставлены.
-Проверка вручную:
-  MODE=avail THRESHOLD=1 TG_TOKEN='${TG_TOKEN_DEFAULT}' TG_ID='${TG_ID_DEFAULT}' ${SCRIPT_PATH}
-Лог:
-  tail -n 50 ~/nexus-docker/restart-on-ram.log"
