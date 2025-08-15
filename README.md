@@ -25,3 +25,7 @@ sudo fallocate -l 150G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swa
 REBOOT RAM
 
 curl -fsSL https://raw.githubusercontent.com/snoopfear/nexus_cli/refs/heads/main/install_reboot.sh | bash
+
+STATS
+
+bash <(curl -fsSL https://raw.githubusercontent.com/snoopfear/nexus_cli/main/parse.sh)
