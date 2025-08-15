@@ -4,10 +4,19 @@ set -euo pipefail
 # === Параметры (можно переопределять через env) ===
 TG_TOKEN="${TG_TOKEN:-6769297888:AAFOeaKmGtsSSAGsSVGN-x3I1v_VQyh140M}"
 TG_ID="${TG_ID:-257319019}"
-THRESHOLD="${THRESHOLD:-97}"        # RAM порог, %
-CPU_THRESHOLD="${CPU_THRESHOLD:-98}"# CPU порог, %
-MODE="${MODE:-avail}"               # raw | avail
-CPU_WINDOW="${CPU_WINDOW:-1}"       # окно замера CPU в секундах
+
+# RAM порог, %
+THRESHOLD="${THRESHOLD:-97}"
+
+# CPU порог, %
+CPU_THRESHOLD="${CPU_THRESHOLD:-98}"
+
+# Способ подсчёта RAM: raw | avail (рекомендуется: avail)
+MODE="${MODE:-avail}"
+
+# Окно замера CPU в секундах
+CPU_WINDOW="${CPU_WINDOW:-1}"
+
 SCRIPT_DIR="$HOME/.local/bin"
 SCRIPT_PATH="$SCRIPT_DIR/restart_nexus_on_high_ram.sh"
 CRON_LOG="$HOME/nexus-docker/cron-run.log"
@@ -15,6 +24,7 @@ CRON_LOG="$HOME/nexus-docker/cron-run.log"
 echo "[install] HOME=$HOME USER=$(id -un)"
 echo "[install] SCRIPT_PATH=$SCRIPT_PATH"
 
+# Каталоги
 mkdir -p "$SCRIPT_DIR"
 mkdir -p "$(dirname "$CRON_LOG")"
 
@@ -27,7 +37,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # ---- Настройки (переопределяются через env) ----
 THRESHOLD=${THRESHOLD:-97}                # RAM порог, %
 MODE=${MODE:-avail}                       # raw | avail
-CPU_THRESHOLD=${CPU_THRESHOLD:-97}        # CPU порог, %
+CPU_THRESHOLD=${CPU_THRESHOLD:-98}        # CPU порог, %
 CPU_WINDOW=${CPU_WINDOW:-1}               # окно замера CPU, сек
 LOG="${LOG:-$HOME/nexus-docker/restart-on-ram.log}"
 
@@ -46,6 +56,7 @@ send_tg() {
     --data-urlencode text="$msg" || true)
   body=$(cat /tmp/tg.body.$$ 2>/dev/null || true)
   rm -f /tmp/tg.body.$$
+  mkdir -p "$(dirname "$LOG")"
   echo "[$(date '+%F %T')] Telegram send code=${code} body=${body}" >> "$LOG"
 }
 
